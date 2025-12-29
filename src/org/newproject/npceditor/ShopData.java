@@ -132,12 +132,12 @@ public class ShopData {
                 }
 
                 if (isMultisell) {
-                    npcToMultisells.computeIfAbsent(npcId, k -> new ArrayList<>()).add(f);
+                    npcToMultisells.computeIfAbsent(npcId, _ -> new ArrayList<>()).add(f);
                 } else {
-                    npcToBuylists.computeIfAbsent(npcId, k -> new ArrayList<>()).add(f);
+                    npcToBuylists.computeIfAbsent(npcId, _ -> new ArrayList<>()).add(f);
                 }
 
-                fileToNpcIds.computeIfAbsent(f.getName(), k -> new ArrayList<>()).add(npcId);
+                fileToNpcIds.computeIfAbsent(f.getName(), _ -> new ArrayList<>()).add(npcId);
             }
         } catch (Exception ex) {}
     }

@@ -80,13 +80,13 @@ public class NpcEditor extends JFrame {
         fileMenu.setForeground(Color.WHITE);
 
         JMenuItem changeRoot = new JMenuItem("Change ROOT Folder");
-        changeRoot.addActionListener(e -> changeDataFolder());
+        changeRoot.addActionListener(_ -> changeDataFolder());
 
         JMenuItem exportCsv = new JMenuItem("Export NPCs to CSV");
-        exportCsv.addActionListener(e -> exportToCsv());
+        exportCsv.addActionListener(_ -> exportToCsv());
 
         JMenuItem createNpc = new JMenuItem("Create New NPC");
-        createNpc.addActionListener(e -> createNewNpcWizard());
+        createNpc.addActionListener(_ -> createNewNpcWizard());
 
         fileMenu.add(changeRoot);
         fileMenu.add(exportCsv);
@@ -141,28 +141,28 @@ public class NpcEditor extends JFrame {
 
         JButton saveAllBtn = new JButton("Save All Modified");
         UIStyle.styleButton(saveAllBtn, new Color(160, 60, 0), Color.WHITE);
-        saveAllBtn.addActionListener(e -> saveAllModified());
+        saveAllBtn.addActionListener(_ -> saveAllModified());
 
         topBarContainer.add(navButtons, BorderLayout.WEST);
         topBarContainer.add(searchBarPanel, BorderLayout.CENTER);
         topBarContainer.add(saveAllBtn, BorderLayout.EAST);
         mainPanel.add(topBarContainer, BorderLayout.NORTH);
 
-        btnModeSearch.addActionListener(e -> {
+        btnModeSearch.addActionListener(_ -> {
             searchBarPanel.setVisible(true);
             centerCards.show(centerCardPanel, "INDIVIDUAL");
         });
-        btnModeMass.addActionListener(e -> {
+        btnModeMass.addActionListener(_ -> {
             searchBarPanel.setVisible(false);
             centerCards.show(centerCardPanel, "MASS");
         });
-        btnModeShop.addActionListener(e -> {
+        btnModeShop.addActionListener(_ -> {
             searchBarPanel.setVisible(false);
             centerCards.show(centerCardPanel, "SHOPS");
         });
 
-        btnReload.addActionListener(e -> refreshData());
-        btnWiki.addActionListener(e -> showWikiDialog());
+        btnReload.addActionListener(_ -> refreshData());
+        btnWiki.addActionListener(_ -> showWikiDialog());
     }
 
     private void showWikiDialog() {
@@ -222,7 +222,7 @@ public class NpcEditor extends JFrame {
         });
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
-        tree.addTreeSelectionListener(e -> {
+        tree.addTreeSelectionListener(_ -> {
             DefaultMutableTreeNode node = (DefaultMutableTreeNode) tree.getLastSelectedPathComponent();
             if (node != null && node.getUserObject() instanceof Npc npc) {
                 searchBarPanel.setVisible(true);
@@ -239,7 +239,8 @@ public class NpcEditor extends JFrame {
         npcDetailPanel.repaint();
     }
 
-    private void refreshList() {
+    // Τώρα public αντί private
+    public void refreshList() {
         monsterRoot.removeAllChildren();
         worldRoot.removeAllChildren();
         if (allNpcs == null || allNpcs.isEmpty()) {
@@ -287,7 +288,11 @@ public class NpcEditor extends JFrame {
             if (matches) {
                 total++;
                 String type = getNpcType(n);
-                if (type.contains("chest") || (n.name != null && n.name.toLowerCase().contains("chest"))) {
+                // Νέο check για custom NPCs βασισμένο σε ID >= 30000
+                if (n.id >= 30000) {
+                    worldGroups.computeIfAbsent("CustomNpc's", k -> new DefaultMutableTreeNode(k))
+                            .add(new DefaultMutableTreeNode(n));
+                } else if (type.contains("chest") || (n.name != null && n.name.toLowerCase().contains("chest"))) {
                     chestNode.add(new DefaultMutableTreeNode(n));
                 } else if (type.contains("grandboss")) {
                     grandBossNode.add(new DefaultMutableTreeNode(n));
@@ -300,7 +305,7 @@ public class NpcEditor extends JFrame {
                     mGroups.computeIfAbsent(bucket, b -> new DefaultMutableTreeNode("Monsters Lv " + String.format("%02d-%02d", b*10+1, (b+1)*10)))
                             .add(new DefaultMutableTreeNode(n));
                 } else {
-                    String folderName = (n.type == null || n.type.trim().isEmpty()) ? "Custom NPC's" : n.type;
+                    String folderName = (n.type == null || n.type.trim().isEmpty()) ? "CustomNpc's" : n.type;
                     worldGroups.computeIfAbsent(folderName, k -> new DefaultMutableTreeNode(k))
                             .add(new DefaultMutableTreeNode(n));
                 }
@@ -317,242 +322,128 @@ public class NpcEditor extends JFrame {
                                      DefaultMutableTreeNode monstersMainNode, DefaultMutableTreeNode chestNode,
                                      Map<Integer, DefaultMutableTreeNode> rbGroups, Map<Integer, DefaultMutableTreeNode> mGroups,
                                      Map<String, DefaultMutableTreeNode> worldGroups) {
-        if (grandBossNode.getChildCount() > 0) {
-            grandBossNode.setUserObject(grandBossNode.getUserObject() + " (" + grandBossNode.getChildCount() + ")");
-            monsterRoot.add(grandBossNode);
-        }
+        if (grandBossNode.getChildCount() > 0) monsterRoot.add(grandBossNode);
         if (!rbGroups.isEmpty()) {
-            for (DefaultMutableTreeNode node : rbGroups.values()) {
-                node.setUserObject(node.getUserObject() + " (" + node.getChildCount() + ")");
-                raidBossesMainNode.add(node);
-            }
-            raidBossesMainNode.setUserObject(raidBossesMainNode.getUserObject() + " (" + raidBossesMainNode.getLeafCount() + ")");
             monsterRoot.add(raidBossesMainNode);
+            rbGroups.values().forEach(raidBossesMainNode::add);
         }
         if (!mGroups.isEmpty()) {
-            for (DefaultMutableTreeNode node : mGroups.values()) {
-                node.setUserObject(node.getUserObject() + " (" + node.getChildCount() + ")");
-                monstersMainNode.add(node);
-            }
-            monstersMainNode.setUserObject(monstersMainNode.getUserObject() + " (" + monstersMainNode.getLeafCount() + ")");
             monsterRoot.add(monstersMainNode);
+            mGroups.values().forEach(monstersMainNode::add);
         }
-        if (chestNode.getChildCount() > 0) {
-            chestNode.setUserObject(chestNode.getUserObject() + " (" + chestNode.getChildCount() + ")");
-            monsterRoot.add(chestNode);
-        }
-        for (DefaultMutableTreeNode node : worldGroups.values()) {
-            node.setUserObject(node.getUserObject() + " (" + node.getChildCount() + ")");
-            worldRoot.add(node);
-        }
+        if (chestNode.getChildCount() > 0) monsterRoot.add(chestNode);
+        if (!worldGroups.isEmpty()) worldGroups.values().forEach(worldRoot::add);
     }
 
-    private void expandAll(JTree t) {
-        for (int i = 0; i < t.getRowCount(); i++) t.expandRow(i);
-    }
-
-    private boolean matchesSearch(Npc n, String nQ, String iQ) {
-        if (!iQ.isEmpty()) {
-            return containsItemOrName(n, iQ);
-        } else {
-            return nQ.isEmpty() || (n.name != null && n.name.toLowerCase().contains(nQ)) || String.valueOf(n.id).startsWith(nQ);
-        }
-    }
-
-    private boolean containsItemOrName(Npc n, String q) {
-        if (n.dropGroups != null) {
-            for (DropGroup g : n.dropGroups) {
-                if (g.items != null) {
-                    for (Npc.Item it : g.items) {
-                        String itemName = GameData.getItemName(it.id);
-                        boolean matchesId = String.valueOf(it.id).equals(q);
-                        boolean matchesName = (itemName != null && itemName.toLowerCase().contains(q));
-                        if (matchesId || matchesName) return true;
-                    }
-                }
+    private boolean matchesSearch(Npc npc, String nQ, String iQ) {
+        boolean npcMatch = nQ.isEmpty() || (npc.name != null && npc.name.toLowerCase().contains(nQ)) || String.valueOf(npc.id).contains(nQ);
+        if (!npcMatch) return false;
+        if (iQ.isEmpty()) return true;
+        for (DropGroup dg : npc.dropGroups) {
+            for (Npc.Item item : dg.items) {
+                if (String.valueOf(item.id).contains(iQ) || (item.description != null && item.description.toLowerCase().contains(iQ))) return true;
             }
         }
-        if (n.spoilItems != null) {
-            for (Npc.Item it : n.spoilItems) {
-                String itemName = GameData.getItemName(it.id);
-                boolean matchesId = String.valueOf(it.id).equals(q);
-                boolean matchesName = (itemName != null && itemName.toLowerCase().contains(q));
-                if (matchesId || matchesName) return true;
-            }
+        for (Npc.Item spoil : npc.spoilItems) {
+            if (String.valueOf(spoil.id).contains(iQ) || (spoil.description != null && spoil.description.toLowerCase().contains(iQ))) return true;
         }
         return false;
     }
 
-    private void saveAllModified() {
-        if (dirtyNpcs.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No changes to save.");
-            return;
-        }
-        if (JOptionPane.showConfirmDialog(this, "Save " + dirtyNpcs.size() + " modified NPCs? (Backup created)", "Confirm Save", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-            backupNpcs();
-            JProgressBar progressBar = new JProgressBar(0, dirtyNpcs.size());
-            JDialog progressDialog = createProgressDialog(progressBar, "Saving...");
-            SwingWorker<Void, Void> worker = new SwingWorker<>() {
-                @Override
-                protected Void doInBackground() {
-                    try {
-                        NpcWriter.saveAllNpcs(allNpcs, DATA_ROOT + File.separator + "npcs");
-                        int count = 0;
-                        for (@SuppressWarnings("unused") Npc npc : dirtyNpcs) {
-                            progressBar.setValue(++count);
-                        }
-                        dirtyNpcs.clear();
-                    } catch (Exception e) {
-                        LOGGER.log(Level.SEVERE, "Error saving NPCs", e);
-                        JOptionPane.showMessageDialog(NpcEditor.this, "Error during save: " + e.getMessage(), "Save Error", JOptionPane.ERROR_MESSAGE);
-                    }
-                    return null;
-                }
-
-                @Override
-                protected void done() {
-                    progressDialog.dispose();
-                    JOptionPane.showMessageDialog(NpcEditor.this, "All modified NPCs saved successfully.");
-                }
-            };
-            worker.execute();
-            progressDialog.setVisible(true);
-        }
-    }
-
-    private void backupNpcs() {
-        try {
-            String backupDir = DATA_ROOT + File.separator + "backup_" + System.currentTimeMillis();
-            File backupFolder = new File(backupDir);
-            backupFolder.mkdirs();
-            LOGGER.info("Backup created at: " + backupDir);
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Backup failed", e);
-        }
-    }
-
-    private JDialog createProgressDialog(JProgressBar progressBar, String title) {
-        JDialog dialog = new JDialog(this, title, true);
-        dialog.add(BorderLayout.CENTER, progressBar);
-        dialog.setSize(300, 75);
-        dialog.setLocationRelativeTo(this);
-        dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-        return dialog;
-    }
-
-    private void changeDataFolder() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Select ROOT 'data' Folder");
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        if (!DATA_ROOT.isEmpty()) {
-            File f = new File(DATA_ROOT);
-            if (f.exists() && f.isDirectory()) chooser.setCurrentDirectory(f);
-        }
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            DATA_ROOT = chooser.getSelectedFile().getAbsolutePath();
-            refreshData();
-        }
-    }
-
-    private void refreshData() {
-        JProgressBar progressBar = new JProgressBar();
-        progressBar.setIndeterminate(true);
-        JDialog progressDialog = createProgressDialog(progressBar, "Reloading Data...");
-        SwingWorker<Void, Void> worker = new SwingWorker<>() {
-            @Override
-            protected Void doInBackground() {
-                try {
-                    GameData.loadAll(DATA_ROOT);
-                    ShopData.loadAll(DATA_ROOT);
-                    allNpcs = NpcReader.loadNpcs(DATA_ROOT + File.separator + "npcs");
-                } catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, "Error loading data", e);
-                    JOptionPane.showMessageDialog(NpcEditor.this, "Error loading data: " + e.getMessage(), "Load Error", JOptionPane.ERROR_MESSAGE);
-                }
-                return null;
-            }
-
-            @Override
-            protected void done() {
-                progressDialog.dispose();
-                refreshList();
-                centerCardPanel.add(new MassOperationPanel(allNpcs, dirtyNpcs), "MASS");
-                centerCardPanel.add(new NpcShopPanel(DATA_ROOT), "SHOPS");
-                JOptionPane.showMessageDialog(NpcEditor.this, "Data reloaded successfully.");
-            }
-        };
-        worker.execute();
-        progressDialog.setVisible(true);
-    }
-
-    private void exportToCsv() {
-        if (allNpcs == null || allNpcs.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No NPCs to export.");
-            return;
-        }
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Save CSV File");
-        if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
-            if (!file.getName().endsWith(".csv")) {
-                file = new File(file.getAbsolutePath() + ".csv");
-            }
-            try {
-                java.io.BufferedWriter writer = new java.io.BufferedWriter(new java.io.FileWriter(file));
-                writer.write("ID,Name,Level,Type\n");
-                for (Npc n : allNpcs) {
-                    writer.write(n.id + "," + (n.name != null ? n.name : "") + "," + n.level + "," + (n.type != null ? n.type : "") + "\n");
-                }
-                writer.close();
-                JOptionPane.showMessageDialog(this, "Exported to " + file.getAbsolutePath());
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Export failed", e);
-                JOptionPane.showMessageDialog(this, "Error exporting: " + e.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
+    private void expandAll(JTree tree) {
+        for (int i = 0; i < tree.getRowCount(); i++) tree.expandRow(i);
     }
 
     private void setupSearchListeners() {
         DocumentListener dl = new DocumentListener() {
-            private void handle() {
-                SwingUtilities.invokeLater(() -> refreshList());
-            }
             @Override
-            public void insertUpdate(DocumentEvent e) { handle(); }
+            public void insertUpdate(DocumentEvent e) { refreshList(); }
             @Override
-            public void removeUpdate(DocumentEvent e) { handle(); }
+            public void removeUpdate(DocumentEvent e) { refreshList(); }
             @Override
-            public void changedUpdate(DocumentEvent e) { handle(); }
+            public void changedUpdate(DocumentEvent e) { refreshList(); }
         };
         npcSearchField.getDocument().addDocumentListener(dl);
         itemSearchField.getDocument().addDocumentListener(dl);
     }
 
-    private JPanel createSearchBox(String labelText, JTextField field, Color labelColor) {
-        JPanel panel = new JPanel(new BorderLayout(5, 0));
-        panel.setOpaque(false);
+    // Τώρα public αντί private
+    public void refreshData() {
+        try {
+            allNpcs = NpcReader.loadNpcs(DATA_ROOT);
+            dirtyNpcs.clear();
+            refreshList();
+            JOptionPane.showMessageDialog(this, "Data reloaded successfully!", "Reload", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error reloading data: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            LOGGER.log(Level.SEVERE, "Reload failed", ex);
+        }
+    }
+
+    private void saveAllModified() {
+        if (dirtyNpcs.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No changes to save!", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        try {
+            NpcWriter.saveAllNpcs(new ArrayList<>(dirtyNpcs), DATA_ROOT);
+            dirtyNpcs.clear();
+            JOptionPane.showMessageDialog(this, "All changes saved!", "Success", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error saving: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            LOGGER.log(Level.SEVERE, "Save failed", ex);
+        }
+    }
+
+    private JPanel createSearchBox(String labelText, JTextField field, Color bg) {
+        JPanel box = new JPanel(new BorderLayout(5, 0));
+        box.setOpaque(false);
         JLabel label = new JLabel(labelText);
-        label.setForeground(labelColor);
-        panel.add(label, BorderLayout.WEST);
-        panel.add(field, BorderLayout.CENTER);
-        return panel;
+        label.setForeground(Color.LIGHT_GRAY);
+        box.add(label, BorderLayout.WEST);
+        box.add(field, BorderLayout.CENTER);
+        return box;
+    }
+
+    private void changeDataFolder() {
+        JFileChooser fc = new JFileChooser(DATA_ROOT);
+        fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            DATA_ROOT = fc.getSelectedFile().getAbsolutePath();
+            refreshData();
+        }
+    }
+
+    private void exportToCsv() {
+        JFileChooser fc = new JFileChooser();
+        if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fc.getSelectedFile();
+            if (!file.getName().endsWith(".csv")) file = new File(file.getParentFile(), file.getName() + ".csv");
+            try (java.io.PrintWriter pw = new java.io.PrintWriter(file)) {
+                pw.println("ID,Name,Level,Type,Title,Exp,SP,HP,MP,PAtk,MAtk,PDef,MDef");
+                for (Npc n : allNpcs) {
+                    pw.printf("%d,%s,%d,%s,%s,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f%n",
+                            n.id, n.name, n.level, n.type, n.title, n.exp, n.sp, n.hp, n.mp, n.pAtk, n.mAtk, n.pDef, n.mDef);
+                }
+                JOptionPane.showMessageDialog(this, "Exported to " + file.getAbsolutePath(), "Success", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Export failed: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    // Νέα public method για add σε dirtyNpcs
+    public void addDirtyNpc(Npc npc) {
+        dirtyNpcs.add(npc);
     }
 
     public static void main(String[] args) {
         try {
-            UIStyle.applyGlobalTheme();
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Theme application failed", e);
+            List<Npc> npcs = NpcReader.loadNpcs(DATA_ROOT);
+            SwingUtilities.invokeLater(() -> new NpcEditor(npcs).setVisible(true));
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(null, "Startup error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            LOGGER.log(Level.SEVERE, "Startup failed", ex);
         }
-        SwingUtilities.invokeLater(() -> {
-            try {
-                GameData.loadAll(DATA_ROOT);
-                ShopData.loadAll(DATA_ROOT);
-                new NpcEditor(NpcReader.loadNpcs(DATA_ROOT + File.separator + "npcs")).setVisible(true);
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Startup failed", e);
-                JOptionPane.showMessageDialog(null, "Error starting app: " + e.getMessage(), "Startup Error", JOptionPane.ERROR_MESSAGE);
-            }
-        });
     }
 }

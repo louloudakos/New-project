@@ -17,11 +17,18 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.TreeMap;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.io.IOException;
+import java.util.stream.Stream;
 
 public class NpcShopPanel extends JPanel {
     private static final long serialVersionUID = 1L;
-
     private String multisellPath;
+    private String customNpcPath;
     // TREE COMPONENTS
     private JTree shopTree;
     private DefaultTreeModel treeModel;
@@ -35,21 +42,18 @@ public class NpcShopPanel extends JPanel {
 
     public NpcShopPanel(String dataRoot) {
         this.multisellPath = dataRoot + File.separator + "shopdata" + File.separator + "multisell";
-
+        this.customNpcPath = dataRoot + File.separator + "CustomNpc's";
         setLayout(new BorderLayout(10, 10));
         setBackground(UIStyle.BG_MAIN);
         setBorder(new EmptyBorder(10, 10, 10, 10));
         new File(multisellPath).mkdirs();
-
         // --- LEFT PANEL (TREE) ---
         JPanel leftPanel = new JPanel(new BorderLayout(0, 5));
         leftPanel.setOpaque(false);
         leftPanel.setPreferredSize(new Dimension(380, 0));
-
         searchField = new JTextField();
         UIStyle.styleField(searchField);
         searchField.setToolTipText("Live search by NPC name or ID");
-
         // Live search + auto expand
         searchField.getDocument().addDocumentListener(new DocumentListener() {
             private void filter() {
@@ -62,7 +66,6 @@ public class NpcShopPanel extends JPanel {
             @Override public void removeUpdate(DocumentEvent e) { filter(); }
             @Override public void changedUpdate(DocumentEvent e) { filter(); }
         });
-
         // Initialize Tree
         rootNode = new DefaultMutableTreeNode("All Shops");
         treeModel = new DefaultTreeModel(rootNode);
@@ -71,45 +74,46 @@ public class NpcShopPanel extends JPanel {
         shopTree.setCellRenderer(new UIStyle.DarkTreeCellRenderer());
         shopTree.setRootVisible(false);
         shopTree.setShowsRootHandles(true);
-
         refreshTree();
-
-        shopTree.addTreeSelectionListener(e -> {
+        shopTree.addTreeSelectionListener(_ -> {
             DefaultMutableTreeNode node = (DefaultMutableTreeNode) shopTree.getLastSelectedPathComponent();
-            if (node != null && node.isLeaf()) {
-                Object obj = node.getUserObject();
-                if (obj instanceof ShopFileNode) {
-                    loadMultisell(((ShopFileNode) obj).file);
+            if (node != null) {
+                if (node.isLeaf()) {
+                    Object obj = node.getUserObject();
+                    if (obj instanceof ShopFileNode) {
+                        loadMultisell(((ShopFileNode) obj).file);
+                    }
+                } else {
+                    // If NPC node selected, load the first linked shop or show list
+                    if (node.getChildCount() > 0) {
+                        DefaultMutableTreeNode firstChild = (DefaultMutableTreeNode) node.getChildAt(0);
+                        Object obj = firstChild.getUserObject();
+                        if (obj instanceof ShopFileNode) {
+                            loadMultisell(((ShopFileNode) obj).file);
+                        }
+                    }
                 }
             }
         });
-
         JScrollPane scrollTree = new JScrollPane(shopTree);
         UIStyle.styleScrollPane(scrollTree);
-
         leftPanel.add(searchField, BorderLayout.NORTH);
         leftPanel.add(scrollTree, BorderLayout.CENTER);
         leftPanel.setBorder(BorderFactory.createTitledBorder(
                 BorderFactory.createLineBorder(Color.GRAY), "NPC Shop Tree", 0, 0, null, Color.WHITE));
-
         // --- CENTER PANEL ---
         JPanel centerPanel = new JPanel(new BorderLayout(5, 5));
         centerPanel.setOpaque(false);
-
         JPanel headerPanel = new JPanel(new BorderLayout(5, 5));
         headerPanel.setOpaque(false);
-
         JLabel lblNpcs = new JLabel("Linked NPC IDs: ");
         lblNpcs.setForeground(Color.WHITE);
         linkedNpcsField = new JTextField();
         UIStyle.styleField(linkedNpcsField);
-
         headerPanel.add(lblNpcs, BorderLayout.WEST);
         headerPanel.add(linkedNpcsField, BorderLayout.CENTER);
         centerPanel.add(headerPanel, BorderLayout.NORTH);
-
         String[] columns = {"Item ID", "Item Name", "Type", "Count", "->", "Cost ID", "Cost Name", "Price"};
-
         tableModel = new DefaultTableModel(columns, 0) {
             private static final long serialVersionUID = 1L;
             @Override
@@ -117,13 +121,11 @@ public class NpcShopPanel extends JPanel {
                 return column == 0 || column == 3 || column == 5 || column == 7;
             }
         };
-
         itemTable = new JTable(tableModel);
         itemTable.setBackground(UIStyle.BG_PANEL);
         itemTable.setForeground(Color.WHITE);
         itemTable.setGridColor(Color.GRAY);
         itemTable.setRowHeight(25);
-
         tableModel.addTableModelListener(e -> {
             int row = e.getFirstRow();
             int col = e.getColumn();
@@ -131,36 +133,28 @@ public class NpcShopPanel extends JPanel {
             if (col == 0) updateProductInfo(row);
             else if (col == 5) updateCostInfo(row);
         });
-
         JScrollPane scrollTable = new JScrollPane(itemTable);
         UIStyle.styleScrollPane(scrollTable);
         centerPanel.add(scrollTable, BorderLayout.CENTER);
-
         // --- TOOLBAR ---
         JToolBar toolbar = new JToolBar();
         toolbar.setBackground(UIStyle.BG_MAIN);
         toolbar.setFloatable(false);
-
         JButton btnAdd = new JButton("Add Item");
         UIStyle.styleButton(btnAdd, new Color(0, 100, 0), Color.WHITE);
-        btnAdd.addActionListener(e -> addItemRow());
-
+        btnAdd.addActionListener(_ -> addItemRow());
         JButton btnRem = new JButton("Remove Item");
         UIStyle.styleButton(btnRem, new Color(150, 50, 50), Color.WHITE);
-        btnRem.addActionListener(e -> removeSelectedRow());
-
+        btnRem.addActionListener(_ -> removeSelectedRow());
         JButton btnSave = new JButton("Save Shop");
         UIStyle.styleButton(btnSave, new Color(0, 100, 150), Color.WHITE);
-        btnSave.addActionListener(e -> saveMultisell());
-
+        btnSave.addActionListener(_ -> saveMultisell());
         JButton btnNew = new JButton("New Shop");
         UIStyle.styleButton(btnNew, new Color(100, 100, 0), Color.WHITE);
-        btnNew.addActionListener(e -> createNewShop());
-
+        btnNew.addActionListener(_ -> createNewShop());
         JButton btnPick = new JButton("Pick Item ID");
         UIStyle.styleButton(btnPick, new Color(100, 100, 100), Color.WHITE);
-        btnPick.addActionListener(e -> pickItemForTable());
-
+        btnPick.addActionListener(_ -> pickItemForTable());
         toolbar.add(btnNew);
         toolbar.addSeparator();
         toolbar.add(btnAdd);
@@ -168,11 +162,9 @@ public class NpcShopPanel extends JPanel {
         toolbar.add(btnPick);
         toolbar.addSeparator();
         toolbar.add(btnSave);
-
         add(leftPanel, BorderLayout.WEST);
         add(centerPanel, BorderLayout.CENTER);
         add(toolbar, BorderLayout.NORTH);
-
         statusLabel = new JLabel("Select a shop to edit.");
         statusLabel.setForeground(Color.CYAN);
         add(statusLabel, BorderLayout.SOUTH);
@@ -181,89 +173,166 @@ public class NpcShopPanel extends JPanel {
     // --- TREE LOGIC ---
     private void refreshTree() {
         rootNode.removeAllChildren();
-        Map<Integer, String> comments = ShopData.getNpcComments();
         String query = searchField.getText().toLowerCase().trim();
-
-        // Categories
-        DefaultMutableTreeNode groupGatekeeper = new DefaultMutableTreeNode("Gatekeepers");
-        DefaultMutableTreeNode groupMerchant = new DefaultMutableTreeNode("Merchants");
-        DefaultMutableTreeNode groupBlacksmith = new DefaultMutableTreeNode("Blacksmiths");
-        DefaultMutableTreeNode groupTeleporter = new DefaultMutableTreeNode("Teleporters");
-        DefaultMutableTreeNode groupOther = new DefaultMutableTreeNode("Others / Custom");
-
-        // Track orphans
+        // Load all multisell files from multisellPath and customNpcPath/**/ItemList/*.xml
         List<File> allFiles = new ArrayList<>();
-        File dir = new File(multisellPath);
-        if (dir.exists()) {
-            File[] files = dir.listFiles((d, name) -> name.endsWith(".xml"));
-            if (files != null) for (File f : files) allFiles.add(f);
+        allFiles.addAll(findXmlFiles(multisellPath));
+        allFiles.addAll(findCustomItemListXmls(customNpcPath));
+        // Parse each XML for <npcs> and comments
+        Map<String, List<NpcInfo>> fileToNpcs = new HashMap<>();
+        for (File f : allFiles) {
+            List<NpcInfo> npcs = parseNpcsFromXml(f);
+            fileToNpcs.put(f.getAbsolutePath(), npcs); // Use absolute path to avoid duplicates
         }
-
-        // Add NPCs to Tree
-        for (Map.Entry<Integer, String> entry : comments.entrySet()) {
+        // Reverse mapping: NPC -> linked files
+        Map<Integer, List<File>> npcToFiles = new HashMap<>();
+        Map<Integer, String> npcToComment = new HashMap<>();
+        for (Map.Entry<String, List<NpcInfo>> entry : fileToNpcs.entrySet()) {
+            File f = new File(entry.getKey());
+            for (NpcInfo info : entry.getValue()) {
+                npcToFiles.computeIfAbsent(info.id, _ -> new ArrayList<>()).add(f);
+                if (info.comment != null) npcToComment.put(info.id, info.comment);
+            }
+        }
+        // Dynamic categories based on comments
+        Map<String, DefaultMutableTreeNode> categoryGroups = new TreeMap<>();
+        DefaultMutableTreeNode unassignedNode = new DefaultMutableTreeNode("Unassigned Shops");
+        // Add NPCs to categories
+        for (Map.Entry<Integer, List<File>> entry : npcToFiles.entrySet()) {
             int npcId = entry.getKey();
-            String originalComment = entry.getValue();
-
-            // Live search filter
-            if (!query.isEmpty() && 
-                !originalComment.toLowerCase().contains(query) && 
+            List<File> files = entry.getValue();
+            String comment = npcToComment.getOrDefault(npcId, "NPC");
+            // Filter by query
+            if (!query.isEmpty() &&
+                !comment.toLowerCase().contains(query) &&
                 !String.valueOf(npcId).contains(query)) {
                 continue;
             }
-
-            // Καθαρίζουμε comment
-            String cleanComment = originalComment;
-            String lower = originalComment.toLowerCase();
+            // Clean comment for display
+            String cleanComment = comment;
+            String lower = comment.toLowerCase();
             if (lower.contains("gatekeeper")) cleanComment = cleanComment.replaceAll("(?i)gatekeeper", "").trim();
             if (lower.contains("teleporter")) cleanComment = cleanComment.replaceAll("(?i)teleporter", "").trim();
             if (lower.contains("teleport")) cleanComment = cleanComment.replaceAll("(?i)teleport", "").trim();
             if (cleanComment.isEmpty()) cleanComment = "NPC";
-
-            // Categorize
-            DefaultMutableTreeNode targetGroup = groupOther;
-            if (lower.contains("gatekeeper")) targetGroup = groupGatekeeper;
-            else if (lower.contains("merchant") || lower.contains("trader") || lower.contains("grocer")) targetGroup = groupMerchant;
-            else if (lower.contains("blacksmith") || lower.contains("pushkin")) targetGroup = groupBlacksmith;
-            else if (lower.contains("teleport")) targetGroup = groupTeleporter;
-
-            List<File> shops = ShopData.getShopsForNpc(npcId);
-
-            if (!shops.isEmpty()) {
-                DefaultMutableTreeNode npcNode = new DefaultMutableTreeNode(cleanComment + " [" + npcId + "]");
-                boolean hasVisibleChildren = false;
-
-                for (File f : shops) {
-                    allFiles.remove(f);
-                    String shopType = ShopData.getShopCategory(f.getName());
-                    npcNode.add(new DefaultMutableTreeNode(new ShopFileNode(f, f.getName() + " - " + shopType)));
-                    hasVisibleChildren = true;
-                }
-
-                if (hasVisibleChildren) targetGroup.add(npcNode);
+            // Determine category
+            String category = determineCategoryFromComment(comment, npcId, files);
+            // Create NPC node
+            DefaultMutableTreeNode npcNode = new DefaultMutableTreeNode(cleanComment + " [" + npcId + "]");
+            // Add linked shops
+            for (File f : files) {
+                allFiles.remove(f);
+                String nodeDisplay = f.getName();
+                ShopFileNode shopNode = new ShopFileNode(f, nodeDisplay);
+                npcNode.add(new DefaultMutableTreeNode(shopNode));
+            }
+            // Add to category if has children
+            if (npcNode.getChildCount() > 0) {
+                categoryGroups.computeIfAbsent(category, k -> new DefaultMutableTreeNode(k)).add(npcNode);
             }
         }
-
-        // Add Orphans
-        if (query.isEmpty() && !allFiles.isEmpty()) {
-            DefaultMutableTreeNode unassignedNode = new DefaultMutableTreeNode("Unassigned Shops");
-            for (File f : allFiles) {
-                String shopType = ShopData.getShopCategory(f.getName());
-                unassignedNode.add(new DefaultMutableTreeNode(new ShopFileNode(f, f.getName() + " - " + shopType)));
-            }
-            if (unassignedNode.getChildCount() > 0) groupOther.add(unassignedNode);
+        // Add unassigned shops
+        for (File f : allFiles) {
+            String nodeDisplay = f.getName();
+            ShopFileNode shopNode = new ShopFileNode(f, nodeDisplay);
+            unassignedNode.add(new DefaultMutableTreeNode(shopNode));
         }
-
-        // Add Groups to Root
-        if (groupGatekeeper.getChildCount() > 0) rootNode.add(groupGatekeeper);
-        if (groupMerchant.getChildCount() > 0) rootNode.add(groupMerchant);
-        if (groupBlacksmith.getChildCount() > 0) rootNode.add(groupBlacksmith);
-        if (groupTeleporter.getChildCount() > 0) rootNode.add(groupTeleporter);
-        if (groupOther.getChildCount() > 0) rootNode.add(groupOther);
-
+        // Add groups to root
+        categoryGroups.values().forEach(rootNode::add);
+        if (unassignedNode.getChildCount() > 0) rootNode.add(unassignedNode);
         treeModel.reload();
-
         // Κλείνουμε όλα στην αρχή
         collapseAllTrees();
+    }
+
+    // Find all .xml in a directory
+    private List<File> findXmlFiles(String path) {
+        List<File> files = new ArrayList<>();
+        File dir = new File(path);
+        if (dir.exists()) {
+            File[] xmlFiles = dir.listFiles((_, name) -> name.endsWith(".xml"));
+            if (xmlFiles != null) files.addAll(List.of(xmlFiles));
+        }
+        return files;
+    }
+
+    // Find all .xml in CustomNpc's/**/ItemList/
+    private List<File> findCustomItemListXmls(String customPath) {
+        List<File> files = new ArrayList<>();
+        try (Stream<Path> walk = Files.walk(Paths.get(customPath))) {
+            walk.filter(p -> p.toString().endsWith(".xml") && p.toString().contains(File.separator + "ItemList" + File.separator))
+                .forEach(p -> files.add(p.toFile()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return files;
+    }
+
+    // Parse <npcs> from XML
+    private List<NpcInfo> parseNpcsFromXml(File file) {
+        List<NpcInfo> npcs = new ArrayList<>();
+        try {
+            DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+            Document doc = dBuilder.parse(file);
+            doc.getDocumentElement().normalize();
+            NodeList npcsList = doc.getElementsByTagName("npcs");
+            if (npcsList.getLength() > 0) {
+                Element npcsElement = (Element) npcsList.item(0);
+                Node child = npcsElement.getFirstChild();
+                while (child != null) {
+                    if (child.getNodeType() == Node.ELEMENT_NODE && child.getNodeName().equals("npc")) {
+                        String idText = child.getTextContent().trim();
+                        int id = Integer.parseInt(idText);
+                        String comment = findCommentForNpc(child);
+                        npcs.add(new NpcInfo(id, comment));
+                    }
+                    child = child.getNextSibling();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return npcs;
+    }
+
+    // Helper to find comment after <npc>
+    private String findCommentForNpc(Node npcNode) {
+        Node next = npcNode.getNextSibling();
+        while (next != null) {
+            if (next.getNodeType() == Node.COMMENT_NODE) {
+                return next.getTextContent().trim();
+            }
+            if (next.getNodeType() == Node.ELEMENT_NODE) {
+                break; // Stop if another element is found
+            }
+            next = next.getNextSibling();
+        }
+        return null;
+    }
+
+    // Determine category from comment, ID, or file path
+    private String determineCategoryFromComment(String comment, int npcId, List<File> files) {
+        if (npcId >= 30000 || files.stream().anyMatch(f -> f.getAbsolutePath().contains("CustomNpc's"))) {
+            return "CustomNpc's";
+        }
+        if (comment == null) return "Others / Custom";
+        String lower = comment.toLowerCase();
+        if (lower.contains("gatekeeper")) return "Gatekeepers";
+        if (lower.contains("merchant") || lower.contains("trader") || lower.contains("grocer")) return "Merchants";
+        if (lower.contains("blacksmith")) return "Blacksmiths";
+        if (lower.contains("teleporter") || lower.contains("teleport")) return "Teleporters";
+        return "Others / Custom";
+    }
+
+    // NPC Info class
+    private static class NpcInfo {
+        int id;
+        String comment;
+        NpcInfo(int id, String comment) {
+            this.id = id;
+            this.comment = comment;
+        }
     }
 
     // Κλείνει όλα τα nodes
@@ -277,7 +346,6 @@ public class NpcShopPanel extends JPanel {
     private void autoExpandMatchingNodes() {
         String query = searchField.getText().toLowerCase().trim();
         if (query.isEmpty()) return;
-
         TreeNode root = (TreeNode) shopTree.getModel().getRoot();
         expandAllMatching(shopTree, new TreePath(root), query);
     }
@@ -285,12 +353,10 @@ public class NpcShopPanel extends JPanel {
     private boolean expandAllMatching(JTree tree, TreePath parent, String query) {
         DefaultMutableTreeNode node = (DefaultMutableTreeNode) parent.getLastPathComponent();
         String nodeText = node.toString().toLowerCase();
-
         if (nodeText.contains(query)) {
             tree.expandPath(parent);
             return true;
         }
-
         boolean found = false;
         for (int i = 0; i < node.getChildCount(); i++) {
             DefaultMutableTreeNode child = (DefaultMutableTreeNode) node.getChildAt(i);
@@ -470,7 +536,7 @@ public class NpcShopPanel extends JPanel {
             StreamResult result = new StreamResult(currentFile);
             transformer.transform(source, result);
             JOptionPane.showMessageDialog(this, "Saved!");
-
+            // Reload ShopData and refresh tree
             ShopData.loadAll(new File(multisellPath).getParentFile().getParent());
             refreshTree();
         } catch (Exception e) {
